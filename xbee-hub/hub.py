@@ -9,7 +9,7 @@
 #
 # Have fun
 
-from xbee import ZigBee 
+from xbee import ZigBee,XBee 
 from apscheduler.scheduler import Scheduler
 from cherrypy.process import plugins
 import logging
@@ -109,14 +109,14 @@ def srcToID(source_addr_long):
     else:
 	return endpoint['id']
 
-def manageClient(source_addr_long, source_addr):
-    endpoint = endpoint_table.find_one(source_addr_long=binascii.hexlify(source_addr_long),source_addr=binascii.hexlify(source_addr))
+def manageClient(source_addr_long):
+    endpoint = endpoint_table.find_one(source_addr_long=binascii.hexlify(source_addr_long))
     if endpoint is not None:
 	return endpoint['id']
     else:
 	uuid=binascii.hexlify(uuid4().bytes)
 #	id = nextId()
-	data = dict(source_addr_long=binascii.hexlify(source_addr_long), source_addr=binascii.hexlify(source_addr), uuid=uuid)
+	data = dict(source_addr_long=binascii.hexlify(source_addr_long), uuid=uuid)
 	endpoint_table.insert(data)
 	return endpoint_table.find_one(uuid=uuid)['id']
 
@@ -129,7 +129,8 @@ def checkState(id):
     node = endpoint_table.find_one(id=id)
     databytes = '\x01'
     sendSwitch( binascii.unhexlify(node['source_addr_long']),
-	binascii.unhexlify(node['source_addr']), '\x00',
+#	binascii.unhexlify(node['source_addr'])
+	'\xff\xfe', '\x00',
 	'\x02', '\x00\xee', '\xc2\x16', '\x01', databytes)
 
 
@@ -193,15 +194,25 @@ def messageReceived(data):
     # save the addresses so they can be used later
     #global switchLongAddr
     #global switchShortAddr
+
+#    if (data['name'] == "tx_status)
+    if (data['id'] == "at_response"):
+        pprint.pprint(data)
+	return
+#    print 'Received message type: ' + data['name']
+    if (data['id'] == 'status'):
+        pprint.pprint(data)
+	return
     switchLongAddr = data['source_addr_long'] 
     switchShortAddr = data['source_addr']
-    id = manageClient(switchLongAddr,switchShortAddr)
-    print 'Received message from uuid: ' + str(id)
+    id = manageClient(switchLongAddr)
+    if id > 1:
+     print 'Received message from uuid: ' + str(id)
     clusterId = (ord(data['cluster'][0])*256) + ord(data['cluster'][1])
 #    time = int(datetime.datetime.now().time())
     info = dict(node_id = id, time = time.time())
     endpoint_state.upsert(info,['id'])
-    print 'Cluster ID:', hex(clusterId),
+ #   print 'Cluster ID:', hex(clusterId),
     if (clusterId == 0x13):
         # This is the device announce message.
         # due to timing problems with the switch itself, I don't 
@@ -210,6 +221,7 @@ def messageReceived(data):
         # if you want to see the data that came in with this message, just
         # uncomment the 'print data' comment up above
         print 'Device Announce Message'
+	pprint.pprint(data)
     elif (clusterId == 0x8005):
         # this is the Active Endpoint Response This message tells you
         # what the device can do, but it isn't constructed correctly to match 
@@ -217,6 +229,7 @@ def messageReceived(data):
         # message that gets it's response after I receive the Match Descriptor
         print 'Active Endpoint Response'
     elif (clusterId == 0x0006):
+	pprint.pprint(data)
         # Match Descriptor Request; this is the point where I finally
         # respond to the switch.  Several messages are sent to cause the 
         # switch to join with the controller at a network level and to cause
@@ -274,27 +287,27 @@ def messageReceived(data):
     elif (clusterId == 0xef):
         clusterCmd = ord(data['rf_data'][2])
         if (clusterCmd == 0x81):
-            print 'Instantaneous Power',
-            print ord(data['rf_data'][3]) + (ord(data['rf_data'][4]) * 256)
+#            print 'Instantaneous Power',
+#            print ord(data['rf_data'][3]) + (ord(data['rf_data'][4]) * 256)
 	    info = dict(node_id = id, type = 'Instaneous power',
 		value = (ord(data['rf_data'][3]) + 
 		ord(data['rf_data'][4]) * 256),
 		time=time.time())
 	    endpoint_data.insert(info)
         elif (clusterCmd == 0x82):
-            print "Minute Stats:",
-            print 'Usage, ',
+ #           print "Minute Stats:",
+ #           print 'Usage, ',
             usage = (ord(data['rf_data'][3]) +
                 (ord(data['rf_data'][4]) * 256) +
                 (ord(data['rf_data'][5]) * 256 * 256) +
                 (ord(data['rf_data'][6]) * 256 * 256 * 256) )
-            print usage, 'Watt Seconds ',
-            print 'Up Time,',
+ #           print usage, 'Watt Seconds ',
+ #           print 'Up Time,',
             upTime = (ord(data['rf_data'][7]) +
                 (ord(data['rf_data'][8]) * 256) +
                 (ord(data['rf_data'][9]) * 256 * 256) +
                 (ord(data['rf_data'][10]) * 256 * 256 * 256))
-            print upTime, 'Seconds'
+ #           print upTime, 'Seconds'
 	    info = dict(node_id = id, type = '5 minute stats',
 		value = (ord(data['rf_data'][3]) + (ord(data['rf_data'][4]) * 256) +
                	(ord(data['rf_data'][5]) * 256 * 256) +
@@ -311,15 +324,15 @@ def messageReceived(data):
 
     elif (clusterId == 0xf0):
         clusterCmd = ord(data['rf_data'][2])
-        print "Cluster Cmd:", hex(clusterCmd),
+ #       print "Cluster Cmd:", hex(clusterCmd),
         if (clusterCmd == 0xfb):
-            print "Temperature: "+ str("%.2f" % (((ord(data['rf_data'][8])*256) 
-		+ ord(data['rf_data'][9])) /1000) )
+ #           print "Temperature: "+ str("%.2f" % (((ord(data['rf_data'][8])*256) 
+ #		+ ord(data['rf_data'][9])) /1000) )
 	    info = dict(node_id = id, type = 'Temperature',
 	    	value = (ord(data['rf_data'][8])*256)+ord(data['rf_data'][9]),
 	    	time = time.time())
-#	    endpoint_data.insert(info)
-            print "Type: "+ str(ord(data['rf_data'][3])) 
+	    endpoint_data.insert(info)
+ #           print "Type: "+ str(ord(data['rf_data'][3])) 
 	    info = dict(id = id, type = ord(data['rf_data'][3]))
 	    endpoint_table.upsert(info, ['id'])
 
@@ -328,28 +341,47 @@ def messageReceived(data):
     elif (clusterId == 0xf6):
         clusterCmd = ord(data['rf_data'][2])
         if (clusterCmd == 0xfd):
-            print "RSSI value:", ord(data['rf_data'][3])
+ #           print "RSSI value:", ord(data['rf_data'][3])
 	    info = dict(node_id = id, type = 'RSSI',
 	    	value = ord(data['rf_data'][3]), time = time.time())
 	    endpoint_data.insert(info)
         elif (clusterCmd == 0xfe):
-            print "Version Information"
+ #           print "Version Information"
 	    info = dict(id = id,
 	    	version = binascii.hexlify(data['rf_data']))
 	    endpoint_table.upsert(info,['id'])
         else:
             print data['rf_data']
+    elif (clusterId == 0xf7):
+	print "Motion detected:",
+        clusterCmd = ord(data['rf_data'][2])
+	val = 0
+        if (clusterCmd == 0xfd):
+	  print "on"
+	  val = 1
+	elif (clusterCmd == 0xfe):
+	  print "off"
+        info = dict(node_id = id, type = 'Motion',
+	    	value = val,
+	    	time = time.time())
+        endpoint_data.insert(info)
+
+    elif (clusterId == 0x8038):
+#        clusterCmd = ord(data['rf_data'][2])
+#	print "MGMT Network Update Request"
+#	pprint.pprint(data)
+	state = 0
     elif (clusterId == 0xee):
         clusterCmd = ord(data['rf_data'][2])
 	state = 0
         if (clusterCmd == 0x80):
-            print "Switch is:",
+ #           print "Switch is:",
             if (ord(data['rf_data'][3]) & 0x01):
 		state = 1
-                print "ON"
+ #               print "ON"
             else:
 		state = 0
-                print "OFF"
+ #               print "OFF"
 	info = dict(id = id,state = state)
 	endpoint_table.upsert(info,['id'])
     else:
@@ -403,7 +435,8 @@ class Hub():
 	   checkIn = getLatestCheckIn(node['id'])
 	   s += '<li>Last check-in: ' + datetime.datetime.fromtimestamp(checkIn).strftime('%Y-%m-%d %H:%M:%S')+'</li>'
 	   if 'type' in node:
-		s += '<li>Type: ' + nodeTypes[node['type']] + '</li></ul>'
+		s += '<li>Type: ' + str(node['type']) + '</li></ul>'
+#		s += '<li>Type: ' + nodeTypes[node['type']] + '</li></ul>'
 	   s += '</div>'
 	s += "</body>" + FOOTER
 	return s
@@ -444,6 +477,14 @@ def start():
     global ser
     global db
     ser = serial.Serial(XBEEPORT, XBEEBAUD_RATE)
+#    zb = XBee(ser)
+#    zb.at(command="NR",paramater="\x01")
+#    reply = zb.wait_read_frame()
+#    while reply['id'] != "status" and reply['status'] != "\x06":
+#       messageReceived(reply)
+#       zb.at(command="NR",parameter="\x01")
+#       reply = zb.wait_read_frame()
+
     zb = ZigBee(ser, callback=messageReceived)
     checkStateAll()
     print "started at ", time.strftime("%A, %B, %d at %H:%M:%S")
@@ -499,7 +540,7 @@ config= {
     'global' : {
 	'server.socket_host' :  '0.0.0.0',
         'server.socket_port': 8080,
-        'engine.autoreload_on': False,
+        'engine.autoreload.on': False,
         },
     '/html' : {
         'tools.staticdir.on'            : True,
