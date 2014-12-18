@@ -221,7 +221,7 @@ def messageReceived(data):
         # if you want to see the data that came in with this message, just
         # uncomment the 'print data' comment up above
         print 'Device Announce Message'
-	pprint.pprint(data)
+#	pprint.pprint(data)
     elif (clusterId == 0x8005):
         # this is the Active Endpoint Response This message tells you
         # what the device can do, but it isn't constructed correctly to match 
@@ -287,27 +287,29 @@ def messageReceived(data):
     elif (clusterId == 0xef):
         clusterCmd = ord(data['rf_data'][2])
         if (clusterCmd == 0x81):
-#            print 'Instantaneous Power',
-#            print ord(data['rf_data'][3]) + (ord(data['rf_data'][4]) * 256)
+	    pprint.pprint(data)
+            print 'Instantaneous Power',
+            print ord(data['rf_data'][3]) + (ord(data['rf_data'][4]) * 256)
 	    info = dict(node_id = id, type = 'Instaneous power',
 		value = (ord(data['rf_data'][3]) + 
 		ord(data['rf_data'][4]) * 256),
 		time=time.time())
 	    endpoint_data.insert(info)
         elif (clusterCmd == 0x82):
- #           print "Minute Stats:",
- #           print 'Usage, ',
+	    pprint.pprint(data)
+            print "Minute Stats:",
+            print 'Usage, ',
             usage = (ord(data['rf_data'][3]) +
                 (ord(data['rf_data'][4]) * 256) +
                 (ord(data['rf_data'][5]) * 256 * 256) +
                 (ord(data['rf_data'][6]) * 256 * 256 * 256) )
- #           print usage, 'Watt Seconds ',
- #           print 'Up Time,',
+            print usage, 'Watt Seconds ',
+            print 'Up Time,',
             upTime = (ord(data['rf_data'][7]) +
                 (ord(data['rf_data'][8]) * 256) +
                 (ord(data['rf_data'][9]) * 256 * 256) +
                 (ord(data['rf_data'][10]) * 256 * 256 * 256))
- #           print upTime, 'Seconds'
+            print upTime, 'Seconds'
 	    info = dict(node_id = id, type = '5 minute stats',
 		value = (ord(data['rf_data'][3]) + (ord(data['rf_data'][4]) * 256) +
                	(ord(data['rf_data'][5]) * 256 * 256) +
@@ -324,15 +326,15 @@ def messageReceived(data):
 
     elif (clusterId == 0xf0):
         clusterCmd = ord(data['rf_data'][2])
- #       print "Cluster Cmd:", hex(clusterCmd),
+        print "Cluster Cmd:", hex(clusterCmd),
         if (clusterCmd == 0xfb):
- #           print "Temperature: "+ str("%.2f" % (((ord(data['rf_data'][8])*256) 
- #		+ ord(data['rf_data'][9])) /1000) )
+            print "Temperature: "+ str("%.2f" % (((ord(data['rf_data'][8])*256) 
+ 		+ ord(data['rf_data'][9])) /1000) )
 	    info = dict(node_id = id, type = 'Temperature',
 	    	value = (ord(data['rf_data'][8])*256)+ord(data['rf_data'][9]),
 	    	time = time.time())
 	    endpoint_data.insert(info)
- #           print "Type: "+ str(ord(data['rf_data'][3])) 
+            print "Type: "+ str(ord(data['rf_data'][3])) 
 	    info = dict(id = id, type = ord(data['rf_data'][3]))
 	    endpoint_table.upsert(info, ['id'])
 
@@ -341,12 +343,12 @@ def messageReceived(data):
     elif (clusterId == 0xf6):
         clusterCmd = ord(data['rf_data'][2])
         if (clusterCmd == 0xfd):
- #           print "RSSI value:", ord(data['rf_data'][3])
+            print "RSSI value:", ord(data['rf_data'][3])
 	    info = dict(node_id = id, type = 'RSSI',
 	    	value = ord(data['rf_data'][3]), time = time.time())
 	    endpoint_data.insert(info)
         elif (clusterCmd == 0xfe):
- #           print "Version Information"
+            print "Version Information"
 	    info = dict(id = id,
 	    	version = binascii.hexlify(data['rf_data']))
 	    endpoint_table.upsert(info,['id'])
@@ -354,7 +356,7 @@ def messageReceived(data):
             print data['rf_data']
     elif (clusterId == 0xf7):
 	print "Motion detected:",
-        clusterCmd = ord(data['rf_data'][2])
+        clusterCmd = ord(data['rf_data'][1])
 	val = 0
         if (clusterCmd == 0xfd):
 	  print "on"
@@ -431,7 +433,9 @@ class Hub():
 		s += '<h3>'+node['name']+'</h3>'
            s += '<ul class="square"><li><a href=node?id='+str(node['id'])+">"
 	   s += node['source_addr_long'] + ":"
-	   s += node['source_addr']+"</a></li>"
+#	   if 'source_addr' in node:
+#		s += node['source_addr']
+	   s+="</a></li>"
 	   checkIn = getLatestCheckIn(node['id'])
 	   s += '<li>Last check-in: ' + datetime.datetime.fromtimestamp(checkIn).strftime('%Y-%m-%d %H:%M:%S')+'</li>'
 	   if 'type' in node:
